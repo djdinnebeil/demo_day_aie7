@@ -1,0 +1,3 @@
+docker run -d --name qdrant-local-test -p 6333:6333 -v /home/DJ/qdrant-local-test:/qdrant/storage qdrant/qdrant
+
+sudo rm -rf /home/DJ/qdrant-local-test
