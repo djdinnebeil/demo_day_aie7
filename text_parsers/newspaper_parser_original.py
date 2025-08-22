@@ -3,15 +3,11 @@ import json
 from pathlib import Path
 
 # Load metadata.json once at startup
-META_FILE = Path("amatol/newspapers/metadata.json")
-if META_FILE.exists():
-    with open(META_FILE, "r", encoding="utf-8") as f:
-        NEWSPAPER_METADATA = json.load(f)
-else:
-    NEWSPAPER_METADATA = {"default": {"attribution_patterns": []}}
+with open("amatol/newspapers/metadata.json", "r", encoding="utf-8") as f:
+    NEWSPAPER_METADATA = json.load(f)
 
 def parse_newspaper_article(file_path: str) -> dict:
-    """Parse a newspaper text file into structured output."""
+    """Parse a newspaper text file into chunk text + minimal useful metadata."""
 
     # --- Step 1: Read + normalize line endings ---
     raw_text = Path(file_path).read_text(encoding="utf-8")
@@ -27,21 +23,20 @@ def parse_newspaper_article(file_path: str) -> dict:
     fname = Path(file_path).stem
     parts = fname.split("__")
     date_str = parts[0]               # e.g., 1919-12-18
-    source_id = parts[1]              # e.g., philadelphia-inquirer
-    newspaper = source_id.replace("-", " ").title()
+    newspaper = parts[1].replace("-", " ").title()  # e.g., Philadelphia Inquirer
     page = parts[2]                   # e.g., p5
 
-    # --- Step 4: Load attribution patterns ---
-    patterns = NEWSPAPER_METADATA.get(source_id, {}).get("attribution_patterns", [])
+    # --- Step 4: Load attribution patterns for this newspaper ---
+    patterns = NEWSPAPER_METADATA.get(newspaper, {}).get("attribution_patterns", [])
     if not patterns:
-        patterns = NEWSPAPER_METADATA.get("default", {}).get("attribution_patterns", [])
+        patterns = NEWSPAPER_METADATA["default"]["attribution_patterns"]
 
-    # --- Step 5: Parse header ---
+    # --- Step 5: Parse header (title, subtitles, attribution, city_date) ---
     header_lines = [l.strip() for l in header.split("\n") if l.strip()]
 
-    title = header_lines[0].title() if header_lines else "Untitled"
+    title = header_lines[0].title()
     city_date = header_lines[-1] if len(header_lines) > 1 else None
-    middle_lines = header_lines[1:-1] if len(header_lines) > 2 else []
+    middle_lines = header_lines[1:-1]  # all between title and city_date
 
     subtitles, attribution = [], None
     for line in middle_lines:
@@ -51,14 +46,15 @@ def parse_newspaper_article(file_path: str) -> dict:
         else:
             subtitles.append(line)
 
+
     # --- Step 6: Build citation ---
-    citation_title = title
+    citation_title = title.title()
     if subtitles:
         citation_title += ": " + "; ".join(subtitles)
 
     citation = f'{newspaper}, {date_str}, {page}, "{citation_title}"'
 
-    # --- Step 7: Build page_content ---
+    # --- Step 7: Build chunk text ---
     chunk_parts = [title]
     if subtitles:
         chunk_parts.extend(subtitles)
@@ -70,8 +66,7 @@ def parse_newspaper_article(file_path: str) -> dict:
         "page_content": page_content,
         "metadata": {
             "source_type": "newspaper",
-            "source_id": source_id,   # consistent with books/journals
-            "source_name": newspaper, # human-readable form
+            "newspaper": newspaper,
             "date": date_str,
             "page": page,
             "title": title,
@@ -82,3 +77,16 @@ def parse_newspaper_article(file_path: str) -> dict:
             "citation": citation
         }
     }
+
+# --- Run through all newspaper text files ---
+if __name__ == "__main__":
+    root = Path("amatol/newspapers")
+    all_files = root.rglob("*.txt")
+
+    for file_path in all_files:
+        parsed = parse_newspaper_article(file_path)
+        print("\n=== File:", file_path, "===")
+        print("Page Content:\n", parsed["page_content"], sep="")
+        print("\nMetadata:")
+        for k, v in parsed["metadata"].items():
+            print(f"  {k}: {v}")

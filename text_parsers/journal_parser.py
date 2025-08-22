@@ -1,51 +1,72 @@
 import json
-import re
 from pathlib import Path
 
-# Load metadata.json
-with open("amatol/journals/metadata.json", "r", encoding="utf-8") as f:
-    METADATA = json.load(f)
+# Load metadata.json if available
+META_FILE = Path("amatol/journals/metadata.json")
+if META_FILE.exists():
+    with open(META_FILE, "r", encoding="utf-8") as f:
+        JOURNAL_META = json.load(f).get("journals", {})
+else:
+    JOURNAL_META = {}
 
-def parse_article(file_path: str) -> dict:
-    """Parse newspaper or journal text file into structured output."""
-    fname = Path(file_path).stem 
-
-    # --- Case 1: Journal ---
-    if fname in METADATA.get("journals", {}):
-        entry = METADATA["journals"][fname]
-        raw_text = Path(file_path).read_text(encoding="utf-8").strip()
-
-        return {
-            "page_content": raw_text,  # whole text body
-            "metadata": {
-                "source_type": "journal",
-                "journal": entry["journal"],
-                "volume": entry["volume"],
-                "issue": entry["issue"],
-                "season": entry["season"],
-                "pages": entry["pages"],
-                "title": entry["title"],
-                "file_path": str(file_path),
-                "citation": entry["citation"]
-            }
-        }
-
-    # --- Case 2: Newspaper (reuse your existing logic) ---
-    # For brevity I’ll just note: you’d call parse_newspaper_article(file_path)
-    # and return its result here.
+def format_page_label(pages: str) -> str:
+    """Format page label with p. or pp. depending on single vs. range."""
+    if not pages:
+        return None
+    if "-" in pages:  # e.g., "45-54"
+        return f"pp. {pages.replace('-', '–')}"  # en-dash for ranges
     else:
-        from newspaper_parser import parse_newspaper_article
-        return parse_newspaper_article(file_path)
+        return f"p. {pages}"
 
-# --- Run through all newspaper text files ---
+def parse_journal_article(file_path: str) -> dict:
+    """Parse a journal article into structured output."""
+    path = Path(file_path)
+    fname = path.stem
+
+    entry = JOURNAL_META.get(fname, {})
+    raw_text = path.read_text(encoding="utf-8").strip()
+
+    source_id = fname
+    source_name = entry.get("journal", source_id.title())
+
+    # Format pages nicely
+    pages = entry.get("pages")
+    page_label = format_page_label(pages) if pages else None
+
+    # Build citation
+    citation = entry.get("citation")
+    if not citation:
+        vol = entry.get("volume")
+        issue = entry.get("issue")
+        season = entry.get("season")
+        title = entry.get("title", fname)
+
+        if vol and issue and season and page_label:
+            citation = f"{source_name} {vol}.{issue}, {season}, {page_label}, \"{title}\""
+        elif vol and issue and page_label:
+            citation = f"{source_name} {vol}.{issue}, {page_label}, \"{title}\""
+        else:
+            citation = f"{source_name}, \"{title}\""
+
+    return {
+        "page_content": raw_text,
+        "metadata": {
+            "source_type": "journal",
+            "source_id": source_id,
+            "source_name": source_name,
+            "journal": entry.get("journal"),
+            "volume": entry.get("volume"),
+            "issue": entry.get("issue"),
+            "season": entry.get("season"),
+            "pages": pages,
+            "title": entry.get("title", fname),
+            "file_path": str(file_path),
+            "citation": citation
+        }
+    }
+
+# Example usage
 if __name__ == "__main__":
-    root = Path("amatol/journals")
-    all_files = root.rglob("*.txt")
-
-    for file_path in all_files:
-        parsed = parse_article(file_path)
-        print("\n=== File:", file_path, "===")
-        print("Page Content:\n", parsed["page_content"], sep="")
-        print("\nMetadata:")
-        for k, v in parsed["metadata"].items():
-            print(f"  {k}: {v}")
+    test_file = "amatol/journals/2019-02-15__sojourn__p45-54__all-aboard-for-amatol-new-jersey.txt"
+    parsed = parse_journal_article(test_file)
+    print(parsed["metadata"])

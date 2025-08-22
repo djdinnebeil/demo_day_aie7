@@ -1,62 +1,70 @@
 import json
 from pathlib import Path
 
-def load_folder_metadata(folder: Path) -> dict:
-    """Load metadata.json from a folder if available."""
-    meta_file = folder / "metadata.json"
-    if meta_file.exists():
-        with open(meta_file, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
-
-def format_source_name(source_id: str) -> str:
-    """Convert machine id into human-friendly name."""
-    return source_id.replace('_', ' ').title()
-
 def format_page_label(page: str) -> str:
     """Format page label with p. or pp. depending on single vs. range."""
     if "-" in page:  # e.g., p135-136
-        # strip the "p" prefix and reformat
         pages = page.lstrip("p")
         return f"pp. {pages.replace('-', '–')}"  # en-dash for ranges
     else:
         pages = page.lstrip("p")
         return f"p. {pages}"
 
-def extract_books_metadata(root_dir: str = "amatol/books"):
-    book_paths = Path(root_dir).rglob("*.txt")
-    metadata_list = []
+def parse_book(file_path: str) -> dict:
+    """Parse a book text file into structured output."""
+    path = Path(file_path)
+    fname = path.stem  # filename without .txt
+    folder = path.parent
+    source_id = folder.name
 
-    for path in book_paths:
-        folder = path.parent
-        source_id = folder.name  
-        folder_meta = load_folder_metadata(folder)
-        
-        source_name = folder_meta.get("title", format_source_name(source_id))
-        year = folder_meta.get("year", None)
-        page = path.stem  # e.g., "p007" or "p135-136"
-        page_label = format_page_label(page)
+    # Look for metadata.json in the same folder
+    meta_file = folder / "metadata.json"
+    if meta_file.exists():
+        with open(meta_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
 
+        # If metadata.json has multiple entries, look up by filename
+        if isinstance(data, dict) and "books" in data:
+            entry = data["books"].get(fname, {})
+        else:
+            # Assume metadata.json just describes this one book
+            entry = data
+    else:
+        entry = {}
+
+    raw_text = path.read_text(encoding="utf-8").strip()
+
+    # Extract metadata fields
+    source_name = entry.get("title", source_id.replace("_", " ").title())
+    year = entry.get("year")
+    pages = entry.get("pages") or fname
+    page_label = format_page_label(pages) if pages.startswith("p") else pages
+
+    # Build citation
+    citation = entry.get("citation")
+    if not citation:
         if year:
             citation = f"{source_name}, {year}, {page_label}"
         else:
             citation = f"{source_name}, {page_label}"
-        
-        meta = {
+
+    return {
+        "page_content": raw_text,
+        "metadata": {
             "source_type": "book",
             "source_id": source_id,
             "source_name": source_name,
+            "title": entry.get("title", source_name),
+            "author": entry.get("author"),
             "year": year,
-            "page": page,
-            "file_path": str(path),
+            "pages": pages,
+            "file_path": str(file_path),
             "citation": citation
         }
-        metadata_list.append(meta)
+    }
 
-    return metadata_list
-
-
+# Example usage
 if __name__ == "__main__":
-    books_metadata = extract_books_metadata()
-    for m in books_metadata:
-        print(m)
+    test_file = "amatol/books/amatol_book/p135-136.txt"
+    parsed = parse_book(test_file)
+    print(parsed["metadata"])

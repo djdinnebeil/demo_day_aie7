@@ -1,51 +1,58 @@
 import json
 from pathlib import Path
 
-# --- Load metadata.json once at startup ---
+# Load metadata.json once at startup
 META_FILE = Path("amatol/reports/metadata.json")
 if META_FILE.exists():
     with open(META_FILE, "r", encoding="utf-8") as f:
-        REPORT_METADATA = json.load(f).get("reports", {})
+        REPORT_META = json.load(f).get("reports", {})
 else:
-    REPORT_METADATA = {}
+    REPORT_META = {}
 
 
 def parse_report(file_path: str) -> dict:
-    """Parse a report text file into structured metadata + text."""
-
+    """Parse a report text file into structured output."""
     path = Path(file_path)
-    report_id = path.stem  # filename without .txt
+    fname = path.stem  # filename without .txt
+
+    # Look up metadata entry for this report
+    entry = REPORT_META.get(fname, {})
+
     raw_text = path.read_text(encoding="utf-8").strip()
 
-    # Lookup metadata if available
-    meta = REPORT_METADATA.get(report_id, {})
-
-    # Default citation if metadata.json missing
-    citation = meta.get("citation", f"Report, {report_id}")
+    # Build citation fallback if missing
+    citation = entry.get("citation")
+    if not citation:
+        citation = f'Report, {fname}'
 
     return {
         "page_content": raw_text,
         "metadata": {
             "source_type": "report",
-            "report_id": report_id,
-            "file_path": str(path),
-            "title": meta.get("title"),
-            "coverage_years": meta.get("coverage_years"),
-            "publication_year": meta.get("publication_year"),
-            "pages": meta.get("pages"),
-            "citation": citation,
+            "source_id": fname,  # machine-friendly key (like source_id in other parsers)
+            "title": entry.get("title"),
+            "coverage_years": entry.get("coverage_years"),
+            "publication_year": entry.get("publication_year"),
+            "pages": entry.get("pages"),
+            "file_path": str(file_path),
+            "citation": citation
         }
     }
 
 
-def parse_all_reports(root_dir: str = "amatol/reports"):
-    """Parse all .txt reports in the folder."""
+def parse_all_reports(root_dir: str = "amatol/reports") -> list[dict]:
+    """Parse all report files under the given directory."""
     report_paths = Path(root_dir).rglob("*.txt")
-    parsed = [parse_report(str(p)) for p in report_paths]
-    return parsed
+    results = []
+    for file_path in report_paths:
+        results.append(parse_report(file_path))
+    return results
 
 
+# Example usage
 if __name__ == "__main__":
     reports = parse_all_reports()
     for r in reports:
-        print(json.dumps(r["metadata"], indent=2))
+        print("\n=== File:", r["metadata"]["file_path"], "===")
+        print("Metadata:", r["metadata"])
+        print("Preview text:", r["page_content"][:200], "...")
