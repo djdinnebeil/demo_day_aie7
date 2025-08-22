@@ -55,7 +55,7 @@ if question:
                 st.write(result["result"])
 
                 st.subheader("📁 Sources consulted")
-                sources = set(doc.metadata.get("source", "unknown") for doc in result["source_documents"])
+                sources = set(doc.metadata.get("citation", "unknown") for doc in result["source_documents"])
                 for source in sorted(sources):
                     st.markdown(f"- `{source}`")
 
