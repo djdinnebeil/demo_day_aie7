@@ -1,14 +1,24 @@
 import re
 import json
 from pathlib import Path
+from datetime import datetime, timedelta
+
+def previous_date(date_str: str) -> str:
+    """
+    Given a date string (YYYY-MM-DD), return the previous day as a string.
+    Handles month/year boundaries and leap years.
+    """
+    dt = datetime.strptime(date_str, "%Y-%m-%d")
+    prev_day = dt - timedelta(days=1)
+    return prev_day.strftime("%Y-%m-%d")
 
 # Load metadata.json once at startup
-META_FILE = Path("amatol/newspapers/metadata.json")
-if META_FILE.exists():
-    with open(META_FILE, "r", encoding="utf-8") as f:
-        NEWSPAPER_METADATA = json.load(f)
-else:
-    NEWSPAPER_METADATA = {"default": {"attribution_patterns": []}}
+def load_newspaper_metadata(file_path: Path) -> dict:
+    meta_file = file_path.parent.parent / "metadata.json"
+    if meta_file.exists():
+        with open(meta_file, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {"default": {"attribution_patterns": []}}
 
 def parse_newspaper_article(file_path: str) -> dict:
     """Parse a newspaper text file into structured output."""
@@ -32,9 +42,7 @@ def parse_newspaper_article(file_path: str) -> dict:
     page = parts[2]                   # e.g., p5
 
     # --- Step 4: Load attribution patterns ---
-    patterns = NEWSPAPER_METADATA.get(source_id, {}).get("attribution_patterns", [])
-    if not patterns:
-        patterns = NEWSPAPER_METADATA.get("default", {}).get("attribution_patterns", [])
+    patterns = load_newspaper_metadata(Path(file_path)).get("default", {}).get("attribution_patterns", [])
 
     # --- Step 5: Parse header ---
     header_lines = [l.strip() for l in header.split("\n") if l.strip()]
@@ -62,6 +70,7 @@ def parse_newspaper_article(file_path: str) -> dict:
     chunk_parts = [title]
     if subtitles:
         chunk_parts.extend(subtitles)
+    chunk_parts.append(previous_date(date_str))
     chunk_parts.append(body)
     page_content = "\n".join([p for p in chunk_parts if p.strip()])
 

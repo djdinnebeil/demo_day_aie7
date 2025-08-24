@@ -2,12 +2,13 @@ import json
 from pathlib import Path
 
 # Load metadata.json once at startup
-META_FILE = Path("amatol/reports/metadata.json")
-if META_FILE.exists():
-    with open(META_FILE, "r", encoding="utf-8") as f:
-        REPORT_META = json.load(f).get("reports", {})
-else:
-    REPORT_META = {}
+def load_report_metadata(file_path: Path) -> dict:
+    """Load metadata.json from the reports folder containing the file."""
+    meta_file = file_path.parent / "metadata.json"
+    if meta_file.exists():
+        with open(meta_file, "r", encoding="utf-8") as f:
+            return json.load(f).get("reports", {})
+    return {}
 
 
 def parse_report(file_path: str) -> dict:
@@ -16,6 +17,7 @@ def parse_report(file_path: str) -> dict:
     fname = path.stem  # filename without .txt
 
     # Look up metadata entry for this report
+    REPORT_META = load_report_metadata(path)
     entry = REPORT_META.get(fname, {})
 
     raw_text = path.read_text(encoding="utf-8").strip()
@@ -29,30 +31,13 @@ def parse_report(file_path: str) -> dict:
         "page_content": raw_text,
         "metadata": {
             "source_type": "report",
-            "source_id": fname,  # machine-friendly key (like source_id in other parsers)
+            "source_id": fname,
             "title": entry.get("title"),
             "coverage_years": entry.get("coverage_years"),
             "publication_year": entry.get("publication_year"),
+            "date": entry.get("publication_year"),
             "pages": entry.get("pages"),
             "file_path": str(file_path),
             "citation": citation
         }
     }
-
-
-def parse_all_reports(root_dir: str = "amatol/reports") -> list[dict]:
-    """Parse all report files under the given directory."""
-    report_paths = Path(root_dir).rglob("*.txt")
-    results = []
-    for file_path in report_paths:
-        results.append(parse_report(file_path))
-    return results
-
-
-# Example usage
-if __name__ == "__main__":
-    reports = parse_all_reports()
-    for r in reports:
-        print("\n=== File:", r["metadata"]["file_path"], "===")
-        print("Metadata:", r["metadata"])
-        print("Preview text:", r["page_content"][:200], "...")

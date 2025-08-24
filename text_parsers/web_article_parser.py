@@ -2,12 +2,14 @@ import json
 from pathlib import Path
 
 # Load metadata.json if available
-META_FILE = Path("amatol/web_articles/metadata.json")
-if META_FILE.exists():
-    with open(META_FILE, "r", encoding="utf-8") as f:
-        WEB_META = json.load(f).get("web_articles", {})
-else:
-    WEB_META = {}
+def load_web_metadata(file_path: Path) -> dict:
+    """Load metadata.json from the web_articles folder containing the file."""
+    meta_file = file_path.parent / "metadata.json"
+    if meta_file.exists():
+        with open(meta_file, "r", encoding="utf-8") as f:
+            return json.load(f).get("web_articles", {})
+    return {}
+
 
 def slug_to_title(slug: str) -> str:
     """Convert slug (e.g., amatol-nj-ghost-town) to title-cased string."""
@@ -15,7 +17,7 @@ def slug_to_title(slug: str) -> str:
         return "Untitled"
     title = slug.replace("_", " ").replace("-", " ").title()
     # Fix common abbreviation issues
-    title = title.replace(" Nj", " N.J.")
+    title = title.replace(" Nj", " NJ")
     return title
 
 def parse_web_article(file_path: str) -> dict:
@@ -29,7 +31,9 @@ def parse_web_article(file_path: str) -> dict:
     slug = parts[2] if len(parts) > 2 else None
 
     # Lookup source by source_id
+    WEB_META = load_web_metadata(path)
     entry = WEB_META.get(source_id, {})
+
     source_name = entry.get("source", source_id.replace("-", " ").title())
     raw_text = path.read_text(encoding="utf-8").strip()
 
